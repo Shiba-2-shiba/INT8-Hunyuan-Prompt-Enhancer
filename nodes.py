@@ -37,7 +37,15 @@ class INT8_Hunyuan_PromptEnhancer:
         
         # 1. Model Setup
         conf = config.load_config()['int8']
+        policy = config.load_policy() # Load policy (new in Phase 2)
         
+        # Initialize Metrics (Phase 3)
+        try:
+            from .core import metrics
+        except ImportError:
+            from core import metrics
+        metrics.collector.configure(policy)
+
         # Auto-download if missing
         ckpt_path = assets.ensure_model(conf)
 
@@ -78,7 +86,14 @@ class INT8_Hunyuan_PromptEnhancer:
         # 4. Post-Processing Enforcement (The "Safety Valve")
         if "illustration" in style_policy:
             # Force strip photo terms unless user originally asked for them
-            new_prompt = postprocess.strip_unwanted_photo_style(new_prompt, text)
+            # Fetch banned words from policy, safely fallback if key missing
+            banned_patterns = policy.get('banned_words', {}).get('illustration', [])
+            new_prompt = postprocess.strip_unwanted_photo_style(
+                new_prompt, 
+                text, 
+                banned_patterns,
+                collector=metrics.collector
+            )
 
         return (new_prompt,)
 
