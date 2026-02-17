@@ -118,7 +118,17 @@ class HunyuanPromptEnhancer:
         decoded_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
         
         # Post-process
-        reprompt = _extract_reprompt(decoded_text)
+        reprompt, metadata = _extract_reprompt(decoded_text)
         reprompt = replace_single_quotes(reprompt)
         
+        # Log Metrics
+        from . import metrics
+        if metrics.collector.enabled:
+            metrics.collector.log("extraction", {
+                "success": bool(reprompt),
+                "method": metadata.get("method", "unknown"),
+                "raw_length": metadata.get("raw_length", 0),
+                "extracted_length": len(reprompt)
+            })
+
         return reprompt
