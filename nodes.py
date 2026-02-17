@@ -70,10 +70,18 @@ class INT8_Hunyuan_PromptEnhancer:
             sys_prompt = prompts.SYS_PROMPT_PHOTO_OPTIMIZED
 
         # 3. Execution
+        
+        # Dynamic Token Budget for Thinking Mode
+        # If thinking is enabled, the model needs more tokens for the thought process within the same generation call.
+        # We double the user's limit (up to a safe hard cap) to prevent cut-offs.
+        final_max_tokens = max_new_tokens
+        if enable_thinking:
+            final_max_tokens = min(max_new_tokens * 2, 8192)
+
         run_config = {
             "temperature": temperature,
             "top_p": top_p,
-            "max_new_tokens": max_new_tokens,
+            "max_new_tokens": final_max_tokens,
             "seed": seed,
             "enable_thinking": enable_thinking,
             "use_cache": True,

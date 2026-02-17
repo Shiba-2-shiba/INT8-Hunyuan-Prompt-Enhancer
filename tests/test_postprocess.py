@@ -95,5 +95,54 @@ class TestPostProcess(unittest.TestCase):
         result = postprocess.strip_unwanted_photo_style(reprompt, original, self.TEST_BANNED)
         self.assertEqual(result, "A cute cat")
 
+    
+    # -------------------------------------------------------------------------
+    # Fixes for Thinking Mode Stability
+    # -------------------------------------------------------------------------
+
+    def test_fallback_removes_answer_tags(self):
+        """Test fallback should remove <answer> and </answer> tags even if regex extraction fails"""
+        # Case where <answer> exists but regex might fail or it's just leftover
+        text = "<think>Thinking...</think>\n<answer> Final prompt </answer>"
+        # Expected: "Final prompt" or at least no tags
+        result, meta = postprocess._extract_reprompt(text)
+        self.assertNotIn("<answer>", result)
+        self.assertNotIn("</answer>", result)
+        self.assertIn("Final prompt", result)
+
+    def test_fallback_removes_broken_answer_tags(self):
+        """Test fallback should remove orphaned </answer> tags"""
+        text = "<think>Thinking...</think>\nFinal prompt</answer>"
+        result, meta = postprocess._extract_reprompt(text)
+        self.assertNotIn("</answer>", result)
+        self.assertEqual(result, "Final prompt")
+
+    def test_reprompt_cutoff_innocent_usage(self):
+        """Test Reprompt extraction should NOT stop at innocent usage of keywords like 'Prompt'"""
+        text = "Reprompt: A girl holding a sign that says 'Prompt engineering is fun'."
+        result, meta = postprocess._extract_reprompt(text)
+        # Current logic might cut at 'Prompt'
+        self.assertIn("engineering is fun", result)
+        self.assertEqual(meta["method"], "reprompt_tag")
+
+    def test_reprompt_cutoff_strict_footer(self):
+        """Test Reprompt extraction SHOULD stop at actual headers"""
+        text = "Reprompt: The stored prompt\nUser: Next command"
+        result, meta = postprocess._extract_reprompt(text)
+        self.assertEqual(result, "The stored prompt")
+
+    def test_extract_reprompt_removes_reprompt_marker_in_fallback(self):
+        """Test fallback should remove 'Reprompt:' if it was missed by the main regex"""
+        text = "<answer>Reprompt: The prompt</answer>"
+        result, meta = postprocess._extract_reprompt(text)
+        self.assertNotIn("Reprompt:", result)
+        self.assertEqual(result, "The prompt")
+
+    def test_think_tag_cleanup(self):
+        """Test that <think> tags are removed in fallback"""
+        text = "<think> long thought process </think> The actual prompt"
+        result, meta = postprocess._extract_reprompt(text)
+        self.assertEqual(result.strip(), "The actual prompt")
+
 if __name__ == '__main__':
     unittest.main()

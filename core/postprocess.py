@@ -14,6 +14,7 @@ def _extract_reprompt(text: str) -> Tuple[str, Dict[str, Any]]:
 
     # 1. Look for explicit Reprompt marker (Best for our new system prompt)
     # Allows for "Reprompt:", "Re-prompt:", etc.
+    # Strict stop conditions: Stop only if a NEW LINE starts with a known header.
     patterns = [
         (r"(?:^|\n)\s*Reprompt\s*:\s*(.*)", "reprompt_tag"),
         (r"(?:^|\n)\s*Re-prompt\s*:\s*(.*)", "reprompt_tag_hyphen"),
@@ -22,29 +23,44 @@ def _extract_reprompt(text: str) -> Tuple[str, Dict[str, Any]]:
         m = re.search(pat, text, flags=re.IGNORECASE | re.DOTALL)
         if m:
             tail = m.group(1)
-            # Stop at standard stop tokens or new sections
+            # Stop at standard stop tokens strictly at start of line
+            # "User:", "Raw:", "<think>", "</think>"
+            # We use MULTILINE mode for ^ anchor matching after newline in `tail`
             stop = re.search(
-                r"(?:\n\s*(?:User|Raw|Prompt|CoT|<think>|</think>))",
+                r"^[\s]*(?:User|Raw|Prompt|CoT|<think>|</think>|Reprompt|Re-prompt)[:>]?",
                 tail,
-                flags=re.IGNORECASE,
+                flags=re.IGNORECASE | re.MULTILINE,
             )
             if stop:
                 tail = tail[:stop.start()]
             
-            metadata["method"] = method_name
-            return tail.strip(), metadata
+            cleaned = tail.strip()
+            # If the extraction is empty or just noise, fallback (e.g. "Reprompt: \n <think>...")
+            if cleaned:
+                metadata["method"] = method_name
+                # Remove residual tags just in case
+                cleaned = re.sub(r"</?answer>", "", cleaned, flags=re.IGNORECASE)
+                return cleaned, metadata
 
     # 2. Look for XML tags (Paper standard)
-    m = re.search(r"<answer>(.*?)</answer>", text, flags=re.DOTALL)
+    m = re.search(r"<answer>(.*?)</answer>", text, flags=re.DOTALL | re.IGNORECASE)
     if m:
         metadata["method"] = "xml"
-        return m.group(1).strip(), metadata
+        cleaned = m.group(1).strip()
+        # Remove internal Reprompt: markers if they exist inside <answer>
+        cleaned = re.sub(r"(?:^|\n)\s*Re-?prompt\s*:\s*", "", cleaned, flags=re.IGNORECASE).strip()
+        return cleaned, metadata
 
-    # 3. Fallback: Remove <think> blocks and return the rest
+    # 3. Fallback: Remove <think> blocks AND <answer> tags
     # This happens if the model forgets "Reprompt:" but outputs text after thinking.
-    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE)
+    # Remove orphan or valid answer tags
+    cleaned = re.sub(r"</?answer>", "", cleaned, flags=re.IGNORECASE)
+    # Remove Reprompt headers if they appeared but weren't caught by step 1 (unlikely but safe)
+    cleaned = re.sub(r"(?:^|\n)\s*Re-?prompt\s*:\s*", "", cleaned, flags=re.IGNORECASE)
+    
     metadata["method"] = "fallback"
-    return cleaned, metadata
+    return cleaned.strip(), metadata
 
 def replace_single_quotes(text):
     """Normalize quotes."""
