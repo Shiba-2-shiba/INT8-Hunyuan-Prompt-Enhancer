@@ -1,0 +1,39 @@
+# Policy for INT8 Hunyuan Prompt Enhancer
+# This file controls the post-processing behavior.
+
+banned_words:
+  illustration:
+    - photo
+    - photograph
+    - photography
+    - photorealistic
+    - realism
+    - realistic
+    - hyper-realistic
+    - hyperrealistic
+    - hyper-realism
+    - hyperrealism
+    - ultra-realistic
+    - ultrarealistic
+    - cinematic
+    - dslr
+    - 35mm
+    - lens
+    - dof
+    - depth of field
+    - bokeh
+    - render
+    - rendering
+    - 8k
+    - overall
+    - presentation
+    - masterpiece
+    - best quality
+    - 写实
+    - 摄影
+    - 照片
+    - 实写
+
+metrics:
+  enabled: false
+  log_file: logs/metrics.jsonl
