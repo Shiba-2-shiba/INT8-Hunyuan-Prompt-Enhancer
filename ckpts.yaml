@@ -1,0 +1,4 @@
+int8:
+  repo_id: "leeooo001/Hunyuan-PromptEnhancer-INT8"
+  subfolder: ""
+  local_dir: "models/reprompt-INT8"
