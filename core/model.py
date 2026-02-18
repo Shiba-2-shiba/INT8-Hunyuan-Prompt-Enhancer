@@ -1,4 +1,8 @@
+# This file is part of a derivative work based on Tencent Hunyuan.
+# See LICENSE.txt and NOTICE.txt for details.
+
 import torch
+
 import logging
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from .postprocess import _extract_reprompt, replace_single_quotes
@@ -106,6 +110,7 @@ class HunyuanPromptEnhancer:
             "do_sample": config['temperature'] > 0,
             "temperature": config['temperature'] if config['temperature'] > 0 else None,
             "top_p": config['top_p'] if config['temperature'] > 0 else None,
+            "top_k": config.get('top_k', 50) if config['temperature'] > 0 else None,
             "use_cache": config['use_cache']
         }
         if attention_mask is not None:

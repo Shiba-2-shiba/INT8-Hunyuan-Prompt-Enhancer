@@ -1,4 +1,8 @@
+# This file is part of a derivative work based on Tencent Hunyuan.
+# See LICENSE.txt and NOTICE.txt for details.
+
 import re
+
 from typing import Tuple, Dict, Any, Optional
 
 def _extract_reprompt(text: str) -> Tuple[str, Dict[str, Any]]:

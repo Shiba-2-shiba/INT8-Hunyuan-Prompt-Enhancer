@@ -1,4 +1,8 @@
 import os
+# This file is part of a derivative work based on Tencent Hunyuan.
+# See LICENSE.txt and NOTICE.txt for details.
+
+import yaml
 import omegaconf
 
 # Default policy (Fallback if policy.yaml is missing)

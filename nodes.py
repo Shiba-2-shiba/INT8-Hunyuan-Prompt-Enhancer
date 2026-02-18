@@ -1,3 +1,6 @@
+# This file is part of a derivative work based on Tencent Hunyuan.
+# See LICENSE.txt and NOTICE.txt for details.
+
 import logging
 try:
     from .core import config, assets, tokenizer_patch, cache, prompts, postprocess
@@ -13,8 +16,9 @@ class INT8_Hunyuan_PromptEnhancer:
             "required": {
                 "text": ("STRING", {"multiline": True, "placeholder": "Enter your prompt here..."}),
                 "style_policy": (["illustration (Tag List)", "photography (Detailed)"],),
-                "temperature": ("FLOAT", {"default": 0.7, "step": 0.01, "min": 0, "max": 2.0}),
+                "temperature": ("FLOAT", {"default": 0.0, "step": 0.01, "min": 0, "max": 2.0}),
                 "top_p": ("FLOAT", {"default": 0.9, "step": 0.01, "min": 0, "max": 1.0}),
+                "top_k": ("INT", {"default": 5, "min": 1, "max": 100, "step": 1}),
                 "max_new_tokens": ("INT", {"default": 512, "step": 1, "min": 128, "max": 4096}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                 "enable_thinking": ("BOOLEAN", {"default": True, "label": "Enable CoT Reasoning"}),
@@ -32,7 +36,7 @@ class INT8_Hunyuan_PromptEnhancer:
     FUNCTION = "run"
     CATEGORY = "XX/Hunyuan"
 
-    def run(self, text, style_policy, temperature, top_p, max_new_tokens, seed, 
+    def run(self, text, style_policy, temperature, top_p, top_k, max_new_tokens, seed, 
             enable_thinking, device_map, attn_backend, custom_sys_prompt=""):
         
         # 1. Model Setup
@@ -81,6 +85,7 @@ class INT8_Hunyuan_PromptEnhancer:
         run_config = {
             "temperature": temperature,
             "top_p": top_p,
+            "top_k": top_k,
             "max_new_tokens": final_max_tokens,
             "seed": seed,
             "enable_thinking": enable_thinking,

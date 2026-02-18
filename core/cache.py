@@ -1,3 +1,7 @@
+# This file is part of a derivative work based on Tencent Hunyuan.
+# See LICENSE.txt and NOTICE.txt for details.
+
+import torch
 import threading
 from .model import HunyuanPromptEnhancer
 

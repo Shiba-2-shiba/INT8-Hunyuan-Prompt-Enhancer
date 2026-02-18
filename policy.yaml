@@ -1,4 +1,7 @@
 # Policy for INT8 Hunyuan Prompt Enhancer
+# This file is part of a derivative work based on Tencent Hunyuan.
+# See LICENSE.txt and NOTICE.txt for details.
+#
 # This file controls the post-processing behavior.
 
 banned_words:

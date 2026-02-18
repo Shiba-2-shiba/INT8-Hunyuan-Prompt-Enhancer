@@ -1,4 +1,8 @@
+# This file is part of a derivative work based on Tencent Hunyuan.
+# See LICENSE.txt and NOTICE.txt for details.
+
 import os
+
 import logging
 from huggingface_hub import snapshot_download
 
