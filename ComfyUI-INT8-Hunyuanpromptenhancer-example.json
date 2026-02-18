@@ -1,86 +1,9 @@
 {
   "id": "bcfe4622-791d-4ec3-ab1c-23ce1c7d38d2",
   "revision": 0,
-  "last_node_id": 13,
-  "last_link_id": 27,
+  "last_node_id": 16,
+  "last_link_id": 32,
   "nodes": [
-    {
-      "id": 1,
-      "type": "PackParser",
-      "pos": [
-        -1877.0904007011422,
-        -3358.448848741004
-      ],
-      "size": [
-        400,
-        256
-      ],
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "subj",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "name": "costume",
-          "type": "STRING",
-          "links": [
-            2
-          ]
-        },
-        {
-          "name": "loc",
-          "type": "STRING",
-          "links": [
-            3
-          ]
-        },
-        {
-          "name": "action",
-          "type": "STRING",
-          "links": [
-            4
-          ]
-        },
-        {
-          "name": "meta_mood",
-          "type": "STRING",
-          "links": [
-            9,
-            14
-          ]
-        },
-        {
-          "name": "meta_style",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "name": "scene_tags",
-          "type": "STRING",
-          "links": [
-            12
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "PackParser",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.6.2"
-        }
-      },
-      "widgets_values": [
-        "{}",
-        545087895681108,
-        "randomize"
-      ]
-    },
     {
       "id": 3,
       "type": "ThemeClothingExpander",
@@ -93,7 +16,7 @@
         150
       ],
       "flags": {},
-      "order": 5,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -126,7 +49,7 @@
         }
       },
       "widgets_values": [
-        401147865112086,
+        586221210682899,
         "randomize",
         "random",
         0.3
@@ -144,7 +67,7 @@
         210
       ],
       "flags": {},
-      "order": 1,
+      "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -191,53 +114,7 @@
       "widgets_values": [
         "random",
         "Aiko (Quiet)",
-        189887791966763,
-        "randomize"
-      ]
-    },
-    {
-      "id": 7,
-      "type": "DictionaryExpand",
-      "pos": [
-        -1432.203269365009,
-        -3467.631333307552
-      ],
-      "size": [
-        273,
-        130
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "key",
-          "type": "STRING",
-          "link": 14
-        }
-      ],
-      "outputs": [
-        {
-          "name": "expanded_text",
-          "type": "STRING",
-          "links": [
-            15,
-            21
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "DictionaryExpand",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.6.2"
-        }
-      },
-      "widgets_values": [
-        "mood_map.json",
-        "",
-        125994066080914,
+        9287293306002,
         "randomize"
       ]
     },
@@ -253,13 +130,13 @@
         166
       ],
       "flags": {},
-      "order": 4,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
           "name": "source",
           "type": "*",
-          "link": 15
+          "link": 32
         }
       ],
       "outputs": [],
@@ -318,50 +195,6 @@
       ]
     },
     {
-      "id": 4,
-      "type": "ThemeLocationExpander",
-      "pos": [
-        -1031.2054574923282,
-        -3448.1215919224346
-      ],
-      "size": [
-        311,
-        130
-      ],
-      "flags": {},
-      "order": 6,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "loc_tag",
-          "type": "STRING",
-          "link": 7
-        }
-      ],
-      "outputs": [
-        {
-          "name": "location_prompt",
-          "type": "STRING",
-          "links": [
-            18
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ThemeLocationExpander",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "version": "7.6.2",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        448681214253638,
-        "randomize",
-        "simple"
-      ]
-    },
-    {
       "id": 5,
       "type": "GarnishSampler",
       "pos": [
@@ -373,7 +206,7 @@
         230
       ],
       "flags": {},
-      "order": 7,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -432,7 +265,7 @@
         }
       },
       "widgets_values": [
-        830470134949112,
+        133466965677979,
         "randomize",
         2,
         false
@@ -450,7 +283,7 @@
         210
       ],
       "flags": {},
-      "order": 3,
+      "order": 2,
       "mode": 0,
       "inputs": [
         {
@@ -524,7 +357,7 @@
         }
       },
       "widgets_values": [
-        649549279080162,
+        797423715246398,
         "randomize",
         "genre_only"
       ]
@@ -547,7 +380,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 27
+          "link": 29
         }
       ],
       "outputs": [],
@@ -616,7 +449,7 @@
           "name": "meta_mood",
           "shape": 7,
           "type": "STRING",
-          "link": 21
+          "link": 30
         },
         {
           "name": "meta_style",
@@ -631,7 +464,7 @@
           "type": "STRING",
           "links": [
             22,
-            26
+            28
           ]
         }
       ],
@@ -646,20 +479,20 @@
       "widgets_values": [
         "",
         869292960516911,
-        867984295064469,
+        83437723579745,
         "randomize"
       ]
     },
     {
-      "id": 13,
+      "id": 14,
       "type": "INT8_Hunyuan_PromptEnhancer",
       "pos": [
-        -119.59485001028979,
-        -3445.589260516884
+        -125.293922177541,
+        -3603.756348160024
       ],
       "size": [
         400,
-        358
+        382
       ],
       "flags": {},
       "order": 10,
@@ -671,7 +504,7 @@
           "widget": {
             "name": "text"
           },
-          "link": 26
+          "link": 28
         }
       ],
       "outputs": [
@@ -679,7 +512,7 @@
           "name": "enhanced_prompt",
           "type": "STRING",
           "links": [
-            27
+            29
           ]
         }
       ],
@@ -689,15 +522,178 @@
       "widgets_values": [
         "",
         "illustration (Tag List)",
-        0.7,
+        0,
         0.9,
+        5,
         768,
-        1113320570730166,
+        538607100724061,
         "randomize",
-        true,
+        false,
         "cuda:0",
         "auto",
         ""
+      ]
+    },
+    {
+      "id": 1,
+      "type": "PackParser",
+      "pos": [
+        -1877.0904007011422,
+        -3358.448848741004
+      ],
+      "size": [
+        400,
+        256
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "subj",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "costume",
+          "type": "STRING",
+          "links": [
+            2
+          ]
+        },
+        {
+          "name": "loc",
+          "type": "STRING",
+          "links": [
+            3
+          ]
+        },
+        {
+          "name": "action",
+          "type": "STRING",
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "meta_mood",
+          "type": "STRING",
+          "links": [
+            9,
+            31
+          ]
+        },
+        {
+          "name": "meta_style",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "scene_tags",
+          "type": "STRING",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PackParser",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.6.2"
+        }
+      },
+      "widgets_values": [
+        "{}",
+        120636808655044,
+        "randomize"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "DictionaryExpand",
+      "pos": [
+        -1360.5533190198514,
+        -3407.6524876226667
+      ],
+      "size": [
+        273.0337890625,
+        130
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "key",
+          "type": "STRING",
+          "link": 31
+        }
+      ],
+      "outputs": [
+        {
+          "name": "expanded_text",
+          "type": "STRING",
+          "links": [
+            30,
+            32
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "DictionaryExpand"
+      },
+      "widgets_values": [
+        "mood_map.json",
+        "",
+        961422151189722,
+        "randomize"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "ThemeLocationExpander",
+      "pos": [
+        -1005.1451146695578,
+        -3461.80326146611
+      ],
+      "size": [
+        311,
+        130
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "loc_tag",
+          "type": "STRING",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "location_prompt",
+          "type": "STRING",
+          "links": [
+            18
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ThemeLocationExpander",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.6.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        948846276676826,
+        "randomize",
+        "detailed"
       ]
     }
   ],
@@ -807,22 +803,6 @@
       "STRING"
     ],
     [
-      14,
-      1,
-      4,
-      7,
-      0,
-      "STRING"
-    ],
-    [
-      15,
-      7,
-      0,
-      8,
-      0,
-      "STRING"
-    ],
-    [
       16,
       2,
       0,
@@ -863,14 +843,6 @@
       "STRING"
     ],
     [
-      21,
-      7,
-      0,
-      9,
-      5,
-      "STRING"
-    ],
-    [
       22,
       9,
       0,
@@ -879,18 +851,42 @@
       "STRING"
     ],
     [
-      26,
+      28,
       9,
       0,
-      13,
+      14,
       0,
       "STRING"
     ],
     [
-      27,
-      13,
+      29,
+      14,
       0,
       12,
+      0,
+      "STRING"
+    ],
+    [
+      30,
+      15,
+      0,
+      9,
+      5,
+      "STRING"
+    ],
+    [
+      31,
+      1,
+      4,
+      15,
+      0,
+      "STRING"
+    ],
+    [
+      32,
+      15,
+      0,
+      8,
       0,
       "STRING"
     ]
@@ -901,13 +897,13 @@
     "workflowRendererVersion": "LG",
     "ue_links": [],
     "ds": {
-      "scale": 1.7474640838085858,
+      "scale": 1.228554965519503,
       "offset": [
-        195.00011532530783,
-        3784.008820669279
+        580.1595564863156,
+        3987.235406876569
       ]
     },
-    "frontendVersion": "1.38.14"
+    "frontendVersion": "1.39.14"
   },
   "version": 0.4
 }
