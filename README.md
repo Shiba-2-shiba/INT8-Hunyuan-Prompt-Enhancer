@@ -47,7 +47,25 @@ ComfyUI向けの**Hunyuan Prompt Enhancer（INT8版）**カスタムノードで
 
 ---
 
+4. `text` に元プロンプトを入力し、`style_policy` を選択します。
+
+## インストール・要件
+
+以下のPythonパッケージが必要です。
+`requirements.txt` からインストールできます。
+
+```bash
+pip install -r requirements.txt
+```
+
+主要な依存関係:
+- `bitsandbytes` (INT8 推論用)
+- `omegaconf`
+- `tiktoken`
+- `transformers`, `torch` (ComfyUI環境で通常導入済み)
+
 ## 使い方（基本）
+
 
 1. ComfyUIの `custom_nodes` 配下に本リポジトリを配置します。
 2. ComfyUIを起動（または再起動）します。
