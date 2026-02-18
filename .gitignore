@@ -1,2 +1,6 @@
+comfy-aimdo
+ComfyUI
+comfy-kitchen
 __pycache__/
-*.py[cod]
+*.pyc
+[cod]
