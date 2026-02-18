@@ -21,7 +21,7 @@ class INT8_Hunyuan_PromptEnhancer:
                 "top_k": ("INT", {"default": 5, "min": 1, "max": 100, "step": 1}),
                 "max_new_tokens": ("INT", {"default": 512, "step": 1, "min": 128, "max": 4096}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "enable_thinking": ("BOOLEAN", {"default": True, "label": "Enable CoT Reasoning"}),
+                "enable_thinking": ("BOOLEAN", {"default": False, "label": "Enable CoT Reasoning"}),
                 "device_map": (["cuda:0", "auto", "cpu"],),
                 "attn_backend": (["auto", "sdpa", "flash_attention_2"],),
             },
