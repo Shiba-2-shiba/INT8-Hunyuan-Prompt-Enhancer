@@ -39,6 +39,16 @@ class INT8_Hunyuan_PromptEnhancer:
     def run(self, text, style_policy, temperature, top_p, top_k, max_new_tokens, seed, 
             enable_thinking, device_map, attn_backend, custom_sys_prompt=""):
         
+        # VRAM Management: Unload other models to free up space
+        try:
+            import comfy.model_management as mm
+            mm.soft_empty_cache()
+        except ImportError:
+            pass
+        
+        # Ensure torch is available for device checks
+        import torch
+
         # 1. Model Setup
         conf = config.load_config()['int8']
         policy = config.load_policy() # Load policy (new in Phase 2)
@@ -64,6 +74,14 @@ class INT8_Hunyuan_PromptEnhancer:
             force_int8=True, 
             attn_backend=attn_backend
         )
+
+        # Ensure model is on the correct device (if offloaded previously)
+        if hasattr(enhancer, 'model'):
+            # If device_map is auto, it handles itself usually, but if we offloaded to cpu manually:
+            # We need to move it back to CUDA if implied by device_map
+            target_device = "cuda" if device_map in ["cuda:0", "auto"] and torch.cuda.is_available() else "cpu"
+            if str(enhancer.model.device) == 'cpu' and target_device == 'cuda':
+                enhancer.model.to(target_device)
 
         # 2. Prompt Strategy Selection
         if custom_sys_prompt and custom_sys_prompt.strip():
@@ -107,6 +125,14 @@ class INT8_Hunyuan_PromptEnhancer:
                 banned_patterns,
                 collector=metrics.collector
             )
+
+        # VRAM Management: Offload this model to let others use VRAM
+        try:
+            enhancer.offload()
+            import comfy.model_management as mm
+            mm.soft_empty_cache()
+        except Exception:
+            pass
 
         return (new_prompt,)
 

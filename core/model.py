@@ -137,3 +137,11 @@ class HunyuanPromptEnhancer:
             })
 
         return reprompt
+        return reprompt
+    
+    def offload(self):
+        """Offload model to CPU and clear cache."""
+        if hasattr(self, 'model'):
+            self.model.to('cpu')
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
