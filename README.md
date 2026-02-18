@@ -91,11 +91,6 @@ int8:
 ### `policy.yaml`
 illustrationモード時に除外したい語彙（禁止語）などのポリシーを調整できます。
 
----
-
-## サンプルワークフロー
-
-`ComfyUI-INT8-Hunyuanpromptenhancer-example.json` を参考に、ノード接続を確認できます。
 
 ---
 
