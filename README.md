@@ -66,7 +66,6 @@ pip install -r requirements.txt
 
 主な依存:
 
-- `bitsandbytes`
 - `omegaconf`
 - `tiktoken`
 - `transformers`
