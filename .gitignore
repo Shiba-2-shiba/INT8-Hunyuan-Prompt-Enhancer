@@ -4,6 +4,8 @@ comfy-kitchen
 __pycache__/
 **/__pycache__/
 .triton_cache/
+.hf_home/
+models/reprompt-INT8-shiba/
 *.pyc
 [Pp]ython*.pyc
 [Pp]ython*.pyo

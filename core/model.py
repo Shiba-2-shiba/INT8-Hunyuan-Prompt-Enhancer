@@ -1,11 +1,26 @@
 # This file is part of a derivative work based on Tencent Hunyuan.
 # See LICENSE.txt and NOTICE.txt for details.
 
+import os
+import json
 import torch
 
 import logging
+from typing import Optional
+
+# Set HF cache env before importing transformers modules that snapshot these paths at import time.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_HF_HOME = os.environ.get("HF_HOME", "").strip() or os.path.join(_REPO_ROOT, ".hf_home")
+os.environ["HF_HOME"] = _HF_HOME
+os.environ["HF_MODULES_CACHE"] = os.environ.get("HF_MODULES_CACHE", "").strip() or os.path.join(_HF_HOME, "modules")
+os.environ["TRANSFORMERS_CACHE"] = os.environ.get("TRANSFORMERS_CACHE", "").strip() or os.path.join(_HF_HOME, "transformers")
+os.makedirs(os.environ["HF_HOME"], exist_ok=True)
+os.makedirs(os.environ["HF_MODULES_CACHE"], exist_ok=True)
+os.makedirs(os.environ["TRANSFORMERS_CACHE"], exist_ok=True)
+
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from .postprocess import _extract_reprompt, replace_single_quotes
+from .int8_triton import apply_quantized_weights
 
 def _triton_available() -> bool:
     try:
@@ -14,8 +29,75 @@ def _triton_available() -> bool:
     except Exception:
         return False
 
+
+def _has_complete_base_model_dir(path: str) -> bool:
+    if not path or not os.path.isdir(path):
+        return False
+    if not os.path.exists(os.path.join(path, "config.json")):
+        return False
+    if os.path.exists(os.path.join(path, "model.safetensors")):
+        return True
+    index_path = os.path.join(path, "model.safetensors.index.json")
+    if not os.path.exists(index_path):
+        return False
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            idx = json.load(f)
+        weight_map = idx.get("weight_map", {})
+        shard_files = set(weight_map.values())
+        if not shard_files:
+            return False
+        return all(os.path.exists(os.path.join(path, shard)) for shard in shard_files)
+    except Exception:
+        return False
+
+
+def _resolve_base_model_dir(preferred_path: str) -> str:
+    if _has_complete_base_model_dir(preferred_path):
+        return preferred_path
+
+    candidates = []
+    env_base = os.environ.get("PE_BASE_MODEL_DIR", "").strip()
+    if env_base:
+        candidates.append(env_base)
+    candidates.append(os.path.abspath(os.path.join(preferred_path, "..", "..", "..", "promptenhancer")))
+
+    for c in candidates:
+        if _has_complete_base_model_dir(c):
+            return c
+    return preferred_path
+
+
+def _ensure_hf_runtime_env() -> None:
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    hf_home = os.environ.get("HF_HOME", "").strip()
+    if not hf_home:
+        hf_home = os.path.join(repo_root, ".hf_home")
+        os.environ["HF_HOME"] = hf_home
+    modules_cache = os.environ.get("HF_MODULES_CACHE", "").strip()
+    if not modules_cache:
+        modules_cache = os.path.join(hf_home, "modules")
+        os.environ["HF_MODULES_CACHE"] = modules_cache
+    transformers_cache = os.environ.get("TRANSFORMERS_CACHE", "").strip()
+    if not transformers_cache:
+        transformers_cache = os.path.join(hf_home, "transformers")
+        os.environ["TRANSFORMERS_CACHE"] = transformers_cache
+    os.makedirs(hf_home, exist_ok=True)
+    os.makedirs(modules_cache, exist_ok=True)
+    os.makedirs(transformers_cache, exist_ok=True)
+
 class HunyuanPromptEnhancer:
-    def __init__(self, models_root_path, device_map="auto", force_int8=True, attn_backend="auto"):
+    def __init__(
+        self,
+        models_root_path,
+        device_map="auto",
+        force_int8=True,
+        attn_backend="auto",
+        quant_backend="bitsandbytes",
+        quantized_safetensors=None,
+        use_triton=True,
+    ):
+        _ensure_hf_runtime_env()
         self.logger = logging.getLogger("HunyuanEnhancer")
         if not self.logger.handlers:
             logging.basicConfig(level=logging.INFO)
@@ -31,15 +113,26 @@ class HunyuanPromptEnhancer:
 
         # Quantization Setup
         quant_cfg = None
-        if force_int8:
+        if quant_backend == "bitsandbytes" and force_int8:
             quant_cfg = BitsAndBytesConfig(load_in_8bit=True)
-            self.logger.info("INT8 Quantization Enabled")
+            self.logger.info("INT8 Quantization Enabled (bitsandbytes)")
+        elif quant_backend == "triton_int8":
+            self.logger.info("INT8 Quantization Enabled (triton)")
 
-        self.logger.info(f"Loading Model from: {models_root_path}")
+        model_load_path = _resolve_base_model_dir(models_root_path)
+        if os.path.abspath(model_load_path) != os.path.abspath(models_root_path):
+            self.logger.warning(
+                "Base model shards are missing in %s; falling back to %s. "
+                "You can override via PE_BASE_MODEL_DIR.",
+                models_root_path,
+                model_load_path,
+            )
+
+        self.logger.info(f"Loading Model from: {model_load_path}")
         
         model_kwargs = dict(
             device_map=device_map,
-            torch_dtype=self.dtype,
+            dtype=self.dtype,
             quantization_config=quant_cfg,
             trust_remote_code=True,
         )
@@ -50,14 +143,43 @@ class HunyuanPromptEnhancer:
 
         # Load Model
         try:
-            self.model = AutoModelForCausalLM.from_pretrained(models_root_path, **model_kwargs).eval()
+            self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
         except TypeError:
             # Fallback if attn_implementation isn't supported
             model_kwargs.pop("attn_implementation", None)
-            self.model = AutoModelForCausalLM.from_pretrained(models_root_path, **model_kwargs).eval()
+            self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
 
-        self.tokenizer = AutoTokenizer.from_pretrained(models_root_path, trust_remote_code=True)
+        tokenizer_path = models_root_path if os.path.exists(os.path.join(models_root_path, "tokenizer_config.json")) else model_load_path
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
 
+        # Apply INT8 weights with Triton backend if selected
+        if quant_backend == "triton_int8":
+            quantized_safetensors = resolve_int8_weights(models_root_path, quantized_safetensors)
+            self.logger.info(f"Using INT8 weights: {quantized_safetensors}")
+
+            def _infer_target_device(dm):
+                if not torch.cuda.is_available():
+                    return "cpu"
+                if dm == "auto":
+                    return "cuda"
+                if isinstance(dm, str) and dm.startswith("cuda"):
+                    return "cuda"
+                if isinstance(dm, dict):
+                    for v in dm.values():
+                        if v == 0:
+                            return "cuda"
+                        if isinstance(v, str) and v.startswith("cuda"):
+                            return "cuda"
+                return "cpu"
+
+            target_device = _infer_target_device(device_map)
+
+            apply_quantized_weights(
+                self.model,
+                quantized_safetensors,
+                device=target_device,
+                use_triton=use_triton,
+            )
     @torch.inference_mode()
     def predict(self, prompt_text, sys_prompt, config):
         messages = [
@@ -137,7 +259,6 @@ class HunyuanPromptEnhancer:
             })
 
         return reprompt
-        return reprompt
     
     def offload(self):
         """Offload model to CPU and clear cache."""
@@ -145,3 +266,52 @@ class HunyuanPromptEnhancer:
             self.model.to('cpu')
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+
+def resolve_int8_weights(models_root_path: str, explicit_path: Optional[str] = None) -> str:
+    """
+    Resolve INT8 safetensors path for Triton backend.
+
+    Priority:
+    1) explicit_path argument
+    2) PE_INT8_WEIGHTS env var
+    3) variant-based defaults in model dir (PE_INT8_VARIANT=optimized|high|auto)
+    """
+    if explicit_path and str(explicit_path).strip():
+        candidate = str(explicit_path).strip()
+        if os.path.exists(candidate):
+            return candidate
+        raise FileNotFoundError(f"Explicit quantized_safetensors not found: {candidate}")
+
+    env_path = os.environ.get("PE_INT8_WEIGHTS", "").strip()
+    if env_path:
+        if os.path.exists(env_path):
+            return env_path
+        raise FileNotFoundError(f"PE_INT8_WEIGHTS does not exist: {env_path}")
+
+    variant = os.environ.get("PE_INT8_VARIANT", "optimized").strip().lower()
+    candidates_by_variant = {
+        "optimized": [
+            "HunyuanImage-2.1-reprompt-INT8-optimized.safetensors",
+            "promptenhancer_merged_simple_int8_tensorwise.safetensors",
+        ],
+        "high": [
+            "promptenhancer_int8_high.safetensors",
+        ],
+        "auto": [
+            "HunyuanImage-2.1-reprompt-INT8-optimized.safetensors",
+            "promptenhancer_int8_high.safetensors",
+            "promptenhancer_merged_simple_int8_tensorwise.safetensors",
+        ],
+    }
+    candidate_names = candidates_by_variant.get(variant, candidates_by_variant["optimized"])
+    for name in candidate_names:
+        candidate = os.path.join(models_root_path, name)
+        if os.path.exists(candidate):
+            return candidate
+
+    checked = ", ".join(candidate_names)
+    raise FileNotFoundError(
+        f"quantized_safetensors not provided and no default found (variant={variant}). "
+        f"Checked: {checked}"
+    )
