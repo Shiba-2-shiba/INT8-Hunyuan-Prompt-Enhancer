@@ -20,7 +20,7 @@ os.makedirs(os.environ["TRANSFORMERS_CACHE"], exist_ok=True)
 
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from .postprocess import _extract_reprompt, replace_single_quotes
-from .int8_triton import apply_quantized_weights
+from .int8_triton import load_int8_state_dict, patched_linear_for_int8_loading
 
 def _triton_available() -> bool:
     try:
@@ -103,7 +103,6 @@ class HunyuanPromptEnhancer:
             logging.basicConfig(level=logging.INFO)
 
         self._compiled = False
-        
         # Determine Dtype
         self.dtype = torch.float16
         if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
@@ -135,6 +134,7 @@ class HunyuanPromptEnhancer:
             dtype=self.dtype,
             quantization_config=quant_cfg,
             trust_remote_code=True,
+            low_cpu_mem_usage=True,
         )
         
         # Attention Backend
@@ -142,44 +142,33 @@ class HunyuanPromptEnhancer:
             model_kwargs["attn_implementation"] = attn_backend
 
         # Load Model
-        try:
-            self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
-        except TypeError:
-            # Fallback if attn_implementation isn't supported
-            model_kwargs.pop("attn_implementation", None)
-            self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
+        if quant_backend == "triton_int8":
+            quantized_safetensors = resolve_int8_weights(models_root_path, quantized_safetensors)
+            self.logger.info(f"Using INT8 weights: {quantized_safetensors}")
+            state_dict = load_int8_state_dict(quantized_safetensors, force_scale_float32=True)
+            with patched_linear_for_int8_loading(use_triton=use_triton):
+                try:
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        model_load_path, state_dict=state_dict, **model_kwargs
+                    ).eval()
+                except TypeError:
+                    # Fallback if attn_implementation isn't supported
+                    model_kwargs.pop("attn_implementation", None)
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        model_load_path, state_dict=state_dict, **model_kwargs
+                    ).eval()
+        else:
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
+            except TypeError:
+                # Fallback if attn_implementation isn't supported
+                model_kwargs.pop("attn_implementation", None)
+                self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
 
         tokenizer_path = models_root_path if os.path.exists(os.path.join(models_root_path, "tokenizer_config.json")) else model_load_path
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
 
-        # Apply INT8 weights with Triton backend if selected
-        if quant_backend == "triton_int8":
-            quantized_safetensors = resolve_int8_weights(models_root_path, quantized_safetensors)
-            self.logger.info(f"Using INT8 weights: {quantized_safetensors}")
-
-            def _infer_target_device(dm):
-                if not torch.cuda.is_available():
-                    return "cpu"
-                if dm == "auto":
-                    return "cuda"
-                if isinstance(dm, str) and dm.startswith("cuda"):
-                    return "cuda"
-                if isinstance(dm, dict):
-                    for v in dm.values():
-                        if v == 0:
-                            return "cuda"
-                        if isinstance(v, str) and v.startswith("cuda"):
-                            return "cuda"
-                return "cpu"
-
-            target_device = _infer_target_device(device_map)
-
-            apply_quantized_weights(
-                self.model,
-                quantized_safetensors,
-                device=target_device,
-                use_triton=use_triton,
-            )
+        # INT8 weights are loaded during model construction when using triton_int8
     @torch.inference_mode()
     def predict(self, prompt_text, sys_prompt, config):
         messages = [
