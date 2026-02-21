@@ -24,12 +24,10 @@ class INT8_Hunyuan_PromptEnhancer:
                 "enable_thinking": ("BOOLEAN", {"default": False, "label": "Enable CoT Reasoning"}),
                 "device_map": (["cuda:0", "auto", "cpu"],),
                 "attn_backend": (["auto", "sdpa", "flash_attention_2"],),
-                "quant_backend": (["bitsandbytes", "triton_int8"],),
             },
             "optional": {
                  # Allowed to override system prompt if absolutely needed, but hidden by default in basic use
                 "custom_sys_prompt": ("STRING", {"multiline": True, "default": "", "placeholder": "Override System Prompt (Optional)"}),
-                "quantized_safetensors": ("STRING", {"multiline": False, "default": "", "placeholder": "Path to INT8 safetensors (optional)"}),
             }
         }
     
@@ -39,7 +37,7 @@ class INT8_Hunyuan_PromptEnhancer:
     CATEGORY = "XX/Hunyuan"
 
     def run(self, text, style_policy, temperature, top_p, top_k=5, max_new_tokens=512, seed=0, 
-            enable_thinking=False, device_map="auto", attn_backend="auto", quant_backend="triton_int8", custom_sys_prompt="", quantized_safetensors=""):
+            enable_thinking=False, device_map="auto", attn_backend="auto", custom_sys_prompt=""):
         
         # VRAM Management: Unload other models to free up space
         try:
@@ -70,7 +68,9 @@ class INT8_Hunyuan_PromptEnhancer:
 
         normalized_device_map = {"": 0} if device_map == "cuda:0" else device_map
         
-        quant_path = quantized_safetensors.strip() if isinstance(quantized_safetensors, str) and quantized_safetensors.strip() else None
+        # Quant backend is fixed to Triton; INT8 weights are resolved automatically.
+        quant_backend = "triton_int8"
+        quant_path = None
 
         enhancer = cache.get_enhancer(
             ckpt_path,

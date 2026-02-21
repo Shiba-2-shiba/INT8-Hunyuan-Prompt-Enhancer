@@ -54,14 +54,34 @@ def _has_complete_base_model_dir(path: str) -> bool:
         return False
 
 
+def _looks_like_quantized_safetensors(path: str) -> bool:
+    """
+    Detect if model.safetensors contains INT8 metadata (e.g., comfy_quant/weight_scale).
+    Used to avoid treating a quantized-only repo as the base model.
+    """
+    base_path = os.path.join(path, "model.safetensors")
+    if not os.path.exists(base_path):
+        return False
+    try:
+        with safe_open(base_path, framework="pt") as f:
+            for k in f.keys():
+                if k.endswith(".comfy_quant") or k.endswith(".weight_scale") or k.endswith(".scale_weight"):
+                    return True
+    except Exception:
+        return False
+    return False
+
+
 def _resolve_base_model_dir(preferred_path: str) -> str:
-    if _has_complete_base_model_dir(preferred_path):
+    if _has_complete_base_model_dir(preferred_path) and not _looks_like_quantized_safetensors(preferred_path):
         return preferred_path
 
     candidates = []
     env_base = os.environ.get("PE_BASE_MODEL_DIR", "").strip()
     if env_base:
         candidates.append(env_base)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates.append(os.path.abspath(os.path.join(repo_root, "..", "promptenhancer")))
     candidates.append(os.path.abspath(os.path.join(preferred_path, "..", "..", "..", "promptenhancer")))
 
     for c in candidates:
@@ -303,6 +323,7 @@ class HunyuanPromptEnhancer:
                 missing_non_int8 = [k for k in missing if not _is_expected_int8_missing(k)]
                 if missing_non_int8:
                     self.logger.info("Missing non-INT8 keys: %d", len(missing_non_int8))
+                    self.logger.info("Missing non-INT8 keys are being filled from base model.")
                     if "lm_head.weight" in missing_non_int8:
                         try:
                             self.model.lm_head.weight = self.model.get_input_embeddings().weight
@@ -451,13 +472,16 @@ def resolve_int8_weights(models_root_path: str, explicit_path: Optional[str] = N
     variant = os.environ.get("PE_INT8_VARIANT", "optimized").strip().lower()
     candidates_by_variant = {
         "optimized": [
+            "model.safetensors",
             "HunyuanImage-2.1-reprompt-INT8-optimized.safetensors",
             "promptenhancer_merged_simple_int8_tensorwise.safetensors",
         ],
         "high": [
+            "model.safetensors",
             "promptenhancer_int8_high.safetensors",
         ],
         "auto": [
+            "model.safetensors",
             "HunyuanImage-2.1-reprompt-INT8-optimized.safetensors",
             "promptenhancer_int8_high.safetensors",
             "promptenhancer_merged_simple_int8_tensorwise.safetensors",
