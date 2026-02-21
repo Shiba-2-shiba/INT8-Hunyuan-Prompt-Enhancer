@@ -21,7 +21,7 @@ os.environ["TMP"] = tmp_dir
 def main():
     model_dir = os.environ.get(
         "PE_MODEL_DIR",
-        os.path.abspath(os.path.join(repo_root, "..", "promptenhancer")),
+        os.path.abspath(os.path.join(repo_root, "models", "reprompt-INT8-shiba")),
     )
     from core.model import resolve_int8_weights
     int8_weights = resolve_int8_weights(model_dir, os.environ.get("PE_INT8_WEIGHTS", "").strip() or None)
@@ -52,9 +52,7 @@ def main():
             enable_thinking=False,
             device_map="cuda:0",
             attn_backend="auto",
-            quant_backend="triton_int8",
             custom_sys_prompt="",
-            quantized_safetensors=int8_weights,
         )
         elapsed = time.perf_counter() - t0
 

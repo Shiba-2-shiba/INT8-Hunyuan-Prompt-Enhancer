@@ -461,5 +461,16 @@ def apply_quantized_weights(
     if missing:
         logger.debug(f"Missing keys after load (expected for INT8): {len(missing)}")
     if unexpected:
-        logger.info(f"Unexpected keys after load: {len(unexpected)}")
+        meta_suffixes = (".comfy_quant", ".weight_scale", ".scale_weight")
+        suppressed = [k for k in unexpected if k.endswith(meta_suffixes)]
+        if suppressed and len(suppressed) == len(unexpected):
+            logger.debug("Unexpected INT8 meta keys after load (suppressed): %d", len(unexpected))
+        elif suppressed:
+            logger.info(
+                "Unexpected keys after load: %d (suppressed INT8 meta: %d)",
+                len(unexpected) - len(suppressed),
+                len(suppressed),
+            )
+        else:
+            logger.info("Unexpected keys after load: %d", len(unexpected))
     return missing, unexpected
