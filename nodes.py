@@ -34,7 +34,7 @@ class INT8_Hunyuan_PromptEnhancer:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("enhanced_prompt",)
     FUNCTION = "run"
-    CATEGORY = "XX/Hunyuan"
+    CATEGORY = "Hunyuan"
 
     def run(self, text, style_policy, temperature, top_p, top_k=5, max_new_tokens=512, seed=0, 
             enable_thinking=False, device_map="auto", attn_backend="auto", custom_sys_prompt=""):
