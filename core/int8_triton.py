@@ -382,7 +382,7 @@ def apply_quantized_weights(
     device: Optional[str] = None,
     use_triton: bool = True,
     default_block_size: int = 128,
-) -> None:
+) -> Tuple[list[str], list[str]]:
     """
     Load quantized weights from a safetensors file and patch INT8 Linear layers.
     """
@@ -462,3 +462,4 @@ def apply_quantized_weights(
         logger.debug(f"Missing keys after load (expected for INT8): {len(missing)}")
     if unexpected:
         logger.info(f"Unexpected keys after load: {len(unexpected)}")
+    return missing, unexpected

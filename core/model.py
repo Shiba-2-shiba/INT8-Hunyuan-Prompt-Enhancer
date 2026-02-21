@@ -4,9 +4,11 @@
 import os
 import json
 import torch
+import time
 
 import logging
 from typing import Optional
+from safetensors.torch import safe_open
 
 # Set HF cache env before importing transformers modules that snapshot these paths at import time.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,7 +22,7 @@ os.makedirs(os.environ["TRANSFORMERS_CACHE"], exist_ok=True)
 
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from .postprocess import _extract_reprompt, replace_single_quotes
-from .int8_triton import load_int8_state_dict, patched_linear_for_int8_loading
+from .int8_triton import apply_quantized_weights
 
 def _triton_available() -> bool:
     try:
@@ -86,6 +88,84 @@ def _ensure_hf_runtime_env() -> None:
     os.makedirs(modules_cache, exist_ok=True)
     os.makedirs(transformers_cache, exist_ok=True)
 
+
+def _dispatch_or_move_model(model: torch.nn.Module, device_map):
+    """
+    Best-effort device placement for INT8 Triton path.
+
+    We avoid passing state_dict to from_pretrained (new Transformers restriction),
+    so we move/dispatch after load.
+    """
+    if device_map is None:
+        return model
+
+    # String device_map: "auto", "cuda:0", "cpu"
+    if isinstance(device_map, str):
+        if device_map == "auto":
+            target = "cuda" if torch.cuda.is_available() else "cpu"
+            return model.to(target)
+        if device_map.startswith("cuda") and torch.cuda.is_available():
+            return model.to("cuda")
+        if device_map == "cpu":
+            return model.to("cpu")
+        # Fallback for unexpected strings
+        target = "cuda" if torch.cuda.is_available() else "cpu"
+        return model.to(target)
+
+    # Dict device_map (accelerate-style)
+    if isinstance(device_map, dict):
+        try:
+            from accelerate import dispatch_model
+            return dispatch_model(model, device_map=device_map)
+        except Exception:
+            target = "cuda" if torch.cuda.is_available() else "cpu"
+            return model.to(target)
+
+    return model
+
+
+def _load_missing_base_weights(model_dir: str, missing_keys: list[str]) -> dict:
+    """
+    Load only missing weights from the base model safetensors.
+    """
+    if not missing_keys:
+        return {}
+
+    missing_set = set(missing_keys)
+    base_path = os.path.join(model_dir, "model.safetensors")
+    index_path = os.path.join(model_dir, "model.safetensors.index.json")
+    out: dict = {}
+
+    if os.path.exists(base_path):
+        with safe_open(base_path, framework="pt") as f:
+            for k in f.keys():
+                if k in missing_set:
+                    out[k] = f.get_tensor(k)
+        return out
+
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            idx = json.load(f)
+        weight_map = idx.get("weight_map", {})
+        shard_to_keys: dict[str, list[str]] = {}
+        for k in missing_set:
+            shard = weight_map.get(k, None)
+            if shard is None:
+                continue
+            shard_to_keys.setdefault(shard, []).append(k)
+        for shard, keys in shard_to_keys.items():
+            shard_path = os.path.join(model_dir, shard)
+            if not os.path.exists(shard_path):
+                continue
+            with safe_open(shard_path, framework="pt") as f:
+                for k in keys:
+                    if k in f.keys():
+                        out[k] = f.get_tensor(k)
+        return out
+
+    return {}
+
+
 class HunyuanPromptEnhancer:
     def __init__(
         self,
@@ -129,6 +209,10 @@ class HunyuanPromptEnhancer:
 
         self.logger.info(f"Loading Model from: {model_load_path}")
         
+        env_device_map = os.environ.get("PE_DEVICE_MAP", "").strip()
+        if env_device_map:
+            device_map = env_device_map
+
         model_kwargs = dict(
             device_map=device_map,
             dtype=self.dtype,
@@ -142,21 +226,107 @@ class HunyuanPromptEnhancer:
             model_kwargs["attn_implementation"] = attn_backend
 
         # Load Model
+        force_old_int8 = os.environ.get("PE_FORCE_OLD_INT8", "0").strip() == "1"
+
+        if quant_backend == "triton_int8" and force_old_int8:
+            # Old path: load base model then replace with INT8 weights (VRAM heavy)
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
+            except TypeError:
+                model_kwargs.pop("attn_implementation", None)
+                self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
+
+            tokenizer_path = models_root_path if os.path.exists(os.path.join(models_root_path, "tokenizer_config.json")) else model_load_path
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+
+            quantized_safetensors = resolve_int8_weights(models_root_path, quantized_safetensors)
+            self.logger.info(f"Using INT8 weights: {quantized_safetensors}")
+
+            def _infer_target_device(dm):
+                if not torch.cuda.is_available():
+                    return "cpu"
+                if dm == "auto":
+                    return "cuda"
+                if isinstance(dm, str) and dm.startswith("cuda"):
+                    return "cuda"
+                if isinstance(dm, dict):
+                    for v in dm.values():
+                        if v == 0:
+                            return "cuda"
+                        if isinstance(v, str) and v.startswith("cuda"):
+                            return "cuda"
+                return "cpu"
+
+            target_device = _infer_target_device(device_map)
+            apply_quantized_weights(
+                self.model,
+                quantized_safetensors,
+                device=target_device,
+                use_triton=use_triton,
+            )
+            return
+
         if quant_backend == "triton_int8":
             quantized_safetensors = resolve_int8_weights(models_root_path, quantized_safetensors)
             self.logger.info(f"Using INT8 weights: {quantized_safetensors}")
-            state_dict = load_int8_state_dict(quantized_safetensors, force_scale_float32=True)
-            with patched_linear_for_int8_loading(use_triton=use_triton):
+            cpu_kwargs = dict(model_kwargs)
+            cpu_kwargs["device_map"] = "cpu"
+            cpu_kwargs["low_cpu_mem_usage"] = True
+            cpu_kwargs["local_files_only"] = True
+            try:
+                self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **cpu_kwargs).eval()
+            except TypeError:
+                cpu_kwargs.pop("attn_implementation", None)
+                self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **cpu_kwargs).eval()
+
+            t1 = time.perf_counter()
+            missing, unexpected = apply_quantized_weights(
+                self.model,
+                quantized_safetensors,
+                device="cpu",
+                use_triton=use_triton,
+            )
+            self.logger.info("INT8 weights applied in %.2fs", time.perf_counter() - t1)
+            if missing:
+                self.logger.info("Missing keys after INT8 apply: %d", len(missing))
+
+                def _is_expected_int8_missing(k: str) -> bool:
+                    return (
+                        k.endswith(".weight_int8")
+                        or k.endswith(".weight_scale")
+                        or k.endswith(".scale_weight")
+                        or k.endswith(".comfy_quant")
+                        or ".int8_impl." in k
+                        or "._int8_impl." in k
+                    )
+
+                missing_non_int8 = [k for k in missing if not _is_expected_int8_missing(k)]
+                if missing_non_int8:
+                    self.logger.info("Missing non-INT8 keys: %d", len(missing_non_int8))
+                    if "lm_head.weight" in missing_non_int8:
+                        try:
+                            self.model.lm_head.weight = self.model.get_input_embeddings().weight
+                        except Exception:
+                            pass
+                    t_fill = time.perf_counter()
+                    fill_state = _load_missing_base_weights(model_load_path, missing_non_int8)
+                    if fill_state:
+                        self.model.load_state_dict(fill_state, strict=False)
+                        self.logger.info(
+                            "Filled %d missing keys from base model in %.2fs",
+                            len(fill_state),
+                            time.perf_counter() - t_fill,
+                        )
+            if unexpected:
+                self.logger.info("Unexpected keys after INT8 apply: %d", len(unexpected))
+            if hasattr(self.model, "tie_weights"):
                 try:
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        model_load_path, state_dict=state_dict, **model_kwargs
-                    ).eval()
-                except TypeError:
-                    # Fallback if attn_implementation isn't supported
-                    model_kwargs.pop("attn_implementation", None)
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        model_load_path, state_dict=state_dict, **model_kwargs
-                    ).eval()
+                    self.model.tie_weights()
+                except Exception:
+                    pass
+            t2 = time.perf_counter()
+            self.model = _dispatch_or_move_model(self.model, device_map)
+            self.logger.info("Model dispatched in %.2fs", time.perf_counter() - t2)
         else:
             try:
                 self.model = AutoModelForCausalLM.from_pretrained(model_load_path, **model_kwargs).eval()
