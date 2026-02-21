@@ -66,10 +66,11 @@ pip install -r requirements.txt
 
 主な依存:
 
-- `omegaconf`
-- `tiktoken`
-- `transformers`
-- `torch`
+omegaconf
+tiktoken
+protobuf
+sentencepiece
+blobfile
 
 ## ライセンス
 
