@@ -6,6 +6,9 @@ __pycache__/
 .triton_cache/
 .hf_home/
 models/reprompt-INT8-shiba/
+RUNBOOK.md
+STATUS.md
+TODO.md
 *.pyc
 [Pp]ython*.pyc
 [Pp]ython*.pyo
