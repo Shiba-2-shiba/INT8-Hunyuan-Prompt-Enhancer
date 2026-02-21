@@ -66,6 +66,7 @@ pip install -r requirements.txt
 
 主な依存:
 
+triton/triton-windows
 omegaconf
 tiktoken
 protobuf
