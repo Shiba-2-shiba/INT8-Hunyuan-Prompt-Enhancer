@@ -1,4 +1,4 @@
 int8:
-  repo_id: "leeooo001/Hunyuan-PromptEnhancer-INT8"
+  repo_id: "Shiba-2-shiba/HunyuanImage-2.1-reprompt-INT8-by-Shiba-2-shiba"
   subfolder: ""
-  local_dir: "models/reprompt-INT8"
+  local_dir: "models/reprompt-INT8-shiba"

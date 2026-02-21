@@ -9,9 +9,17 @@ from .model import HunyuanPromptEnhancer
 _MODEL_CACHE = {}
 _CACHE_LOCK = threading.Lock()
 
-def get_enhancer(ckpt_path, device_map, force_int8, attn_backend):
-    key = (ckpt_path, str(device_map), force_int8, attn_backend)
+def get_enhancer(ckpt_path, device_map, force_int8, attn_backend, quant_backend="bitsandbytes", quantized_safetensors=None, use_triton=True):
+    key = (ckpt_path, str(device_map), force_int8, attn_backend, quant_backend, str(quantized_safetensors), use_triton)
     with _CACHE_LOCK:
         if key not in _MODEL_CACHE:
-            _MODEL_CACHE[key] = HunyuanPromptEnhancer(ckpt_path, device_map, force_int8, attn_backend)
+            _MODEL_CACHE[key] = HunyuanPromptEnhancer(
+                ckpt_path,
+                device_map,
+                force_int8,
+                attn_backend,
+                quant_backend=quant_backend,
+                quantized_safetensors=quantized_safetensors,
+                use_triton=use_triton,
+            )
         return _MODEL_CACHE[key]

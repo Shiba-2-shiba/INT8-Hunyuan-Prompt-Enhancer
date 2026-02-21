@@ -1,3 +1,6 @@
 bitsandbytes
 omegaconf
 tiktoken
+protobuf
+sentencepiece
+blobfile

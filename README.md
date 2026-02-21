@@ -1,111 +1,102 @@
 # INT8-Hunyuan-Prompt-Enhancer
 
-ComfyUI向けの**Hunyuan Prompt Enhancer（INT8版）**カスタムノードです。  
-入力したプロンプトを、画像生成向けに整理・補強した `Reprompt: ...` 形式へ変換します。
-(Powered by Tencent Hunyuan)
+ComfyUI向けの **Hunyuan Prompt Enhancer（INT8 + Triton）** カスタムノードです。  
+入力プロンプトを画像生成向けに強化し、`enhanced_prompt` を出力します。
 
+**本プロジェクトは現在 `reprompt-INT8-shiba` を既定の自動ダウンロード先として運用しています。**
 
-このカスタムノードは、[leeooo001/comfyui-Hunyuan-PromptEnhancer](https://github.com/leeooo001/comfyui-Hunyuan-PromptEnhancer) の作者が公開されているINT8モデル（`leeooo001/Hunyuan-PromptEnhancer-INT8`）を利用しています。  
-スクリプト構成は大幅に変更しつつ、本カスタムノードは同プロジェクトの内容を改良して作成しました。素晴らしいモデルと先行実装の公開に、心より感謝します。
+## 現在のモデル運用方針
 
-**【注意】本リポジトリは非公式のコミュニティプロジェクトであり、Tencent公式のリポジトリではありません。**
+- 自動ダウンロード先:  
+  `Shiba-2-shiba/HunyuanImage-2.1-reprompt-INT8-by-Shiba-2-shiba`
+- 既定INT8重み:  
+  `HunyuanImage-2.1-reprompt-INT8-optimized.safetensors`
+- 量子化方針:  
+  **INT8 + FP16 keep（層ごとの混在）** により、速度と精度のバランスを狙う構成
 
----
+## 主要ポイント
 
-## 主な特徴
+- Triton INT8カーネルによる高速化
+- 実測ベンチでは `triton_on` と `triton_off` 比較で **約1.3x（1.36〜1.37x）** の高速化を確認
+- `fallback率`（Triton失敗率）を可視化し、実際にTriton経路で動いているか確認可能
+- Windows環境の権限問題を避けるため、HFキャッシュをプロジェクト内へ固定
 
-- **INT8モデルを自動取得**  
-  初回実行時に `ckpts.yaml` の設定を参照し、必要なモデルを自動ダウンロードします。
-- **用途別のプロンプト最適化**
-  - `illustration (Tag List)`：イラスト/アニメ向けにタグ列へ最適化
-  - `photography (Detailed)`：写真調・高精細向けに詳細化
-- **後処理によるスタイル保護**  
-  - illustrationモードでは、不要な写真系キーワードの混入を抑制します（`policy.yaml` で調整可能）。
-- **推論パラメータの調整が可能**  
-  - `temperature`, `top_p`, `top_k`, `max_new_tokens`, `seed`, `enable_thinking` などをノード上で指定できます。
-  - **デフォルト設定（Temp=0）について**:
-    オリジナルのスクリプト（再現性重視）に合わせて、デフォルトの `temperature` を `0`（Greedy Search）に設定しています。
-    創造性やバリエーションを出したい場合は、`temperature` を `0.7` 以上などに上げてください。
-- **デバイス/Attention backend切り替え**  
-  `cuda:0` / `auto` / `cpu`、`sdpa` / `flash_attention_2` などを選択できます。
+## ノード
 
----
-
-## ノード情報
-
-- **ノード名（表示）**: `INT8 Hunyuan Prompt Enhancer`
-- **カテゴリ**: `XX/Hunyuan`
-- **入力（主要）**:
-  - `text`: 元プロンプト
-  - `style_policy`: `illustration (Tag List)` or `photography (Detailed)`
+- 表示名: `INT8 Hunyuan Prompt Enhancer`
+- カテゴリ: `XX/Hunyuan`
+- 主入力:
+  - `text`
+  - `style_policy` (`illustration (Tag List)` / `photography (Detailed)`)
   - `temperature`, `top_p`, `top_k`, `max_new_tokens`, `seed`
-  - `enable_thinking`, `device_map`, `attn_backend`
-- **入力（任意）**:
-  - `custom_sys_prompt`: システムプロンプトを上書き
-- **出力**:
-  - `enhanced_prompt`（STRING）
+  - `enable_thinking`, `device_map`, `attn_backend`, `quant_backend`
+- 任意入力:
+  - `custom_sys_prompt`
+  - `quantized_safetensors`
+- 出力:
+  - `enhanced_prompt`
 
----
+## 自動ダウンロード設定
 
-4. `text` に元プロンプトを入力し、`style_policy` を選択します。
+`ckpts.yaml`
 
-## インストール・要件
+```yaml
+int8:
+  repo_id: "Shiba-2-shiba/HunyuanImage-2.1-reprompt-INT8-by-Shiba-2-shiba"
+  subfolder: ""
+  local_dir: "models/reprompt-INT8-shiba"
+```
 
-以下のPythonパッケージが必要です。
-`requirements.txt` からインストールできます。
+## ベースモデルについて（重要）
+
+`reprompt-INT8-shiba` 側にベース分割重み（`model-00001-of-00004.safetensors` など）が存在しない場合、  
+実装は自動でベースモデルディレクトリへフォールバックします。
+
+- 優先:
+  1. `PE_BASE_MODEL_DIR`（指定されている場合）
+  2. `../promptenhancer`（既定フォールバック）
+
+これにより、INT8重みをShibaリポジトリから取得しつつ推論を継続できます。
+
+## 高速化ベンチ
+
+```powershell
+cd C:\Users\inott\Downloads\test\INT8-Hunyuan-Prompt-Enhancer
+$env:PE_MODEL_DIR="C:\Users\inott\Downloads\test\promptenhancer"
+$env:PE_INT8_VARIANT="optimized"
+$env:PE_COMPARE_TRITON="1"
+$env:PE_ENABLE_THINKING="0"
+$env:PE_BENCH_RUNS="5"
+$env:PE_BENCH_WARMUP="1"
+$env:PE_MAX_NEW_TOKENS="512"
+python tools\benchmark_triton_int8.py
+```
+
+出力で確認する指標:
+
+- `prefill` / `decode` / `total`
+- `decode_tok/s` / `total_tok/s`
+- `[int8:...] fallback_rate=...`
+- `[compare] ... total_speedup=...x`
+
+## 依存関係
+
+`requirements.txt` を使用:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-主要な依存関係:
-- `bitsandbytes` (INT8 推論用)
+主な依存:
+
+- `bitsandbytes`
 - `omegaconf`
 - `tiktoken`
-- `transformers`, `torch` (ComfyUI環境で通常導入済み)
-
-## 使い方（基本）
-
-
-1. ComfyUIの `custom_nodes` 配下に本リポジトリを配置します。
-2. ComfyUIを起動（または再起動）します。
-3. ノード一覧から `INT8 Hunyuan Prompt Enhancer` を追加します。
-4. `text` に元プロンプトを入力し、`style_policy` を選択します。
-5. 必要に応じて生成パラメータを調整して実行します。
-6. 出力された `enhanced_prompt` を、画像生成ノードのプロンプト入力へ接続します。
-
----
-
-## 設定ファイル
-
-### `ckpts.yaml`
-モデル取得先と保存先を定義します。
-
-```yaml
-int8:
-  repo_id: "leeooo001/Hunyuan-PromptEnhancer-INT8"
-  subfolder: ""
-  local_dir: "models/reprompt-INT8"
-```
-
-### `policy.yaml`
-illustrationモード時に除外したい語彙（禁止語）などのポリシーを調整できます。
-
-
----
-
-## 謝辞
-
-- INT8モデルおよび先行実装を公開された  
-  [leeooo001/comfyui-Hunyuan-PromptEnhancer](https://github.com/leeooo001/comfyui-Hunyuan-PromptEnhancer) の作者に深く感謝いたします。
-- 本プロジェクトは上記の知見をベースに、構成・処理・運用性を見直して再設計したものです。
-
----
+- `transformers`
+- `torch`
 
 ## ライセンス
 
-本リポジトリは、[Tencent Hunyuan Community License Agreement](LICENSE.txt) の条件に従って公開・配布されています。
-詳細および商標に関する通知については [NOTICE.txt](NOTICE.txt) を参照してください。
-
-また、本リポジトリは [Hunyuan-PromptEnhancer/PromptEnhancer](https://github.com/Hunyuan-PromptEnhancer/PromptEnhancer) およびその派生著作物を利用しています。
+本リポジトリは [Tencent Hunyuan Community License Agreement](LICENSE.txt) の条件に従います。  
+詳細は [NOTICE.txt](NOTICE.txt) を参照してください。
 
