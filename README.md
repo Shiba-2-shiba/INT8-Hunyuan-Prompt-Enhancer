@@ -5,6 +5,9 @@ ComfyUI向けの **Hunyuan Prompt Enhancer（INT8 + Triton）** カスタムノ�
 
 **本プロジェクトは現在 `reprompt-INT8-shiba` を既定の自動ダウンロード先として運用しています。**
 
+初回推論時にモデルがない場合に自動ダウンロードされる仕組みです。
+
+
 ## 現在のモデル運用方針
 
 - 自動ダウンロード先:  
@@ -52,27 +55,6 @@ int8:
   subfolder: ""
   local_dir: "models/reprompt-INT8-shiba"
 ```
-
-## 高速化ベンチ
-
-```powershell
-cd C:\Users\inott\Downloads\test\INT8-Hunyuan-Prompt-Enhancer
-$env:PE_MODEL_DIR="C:\Users\inott\Downloads\test\promptenhancer"
-$env:PE_INT8_VARIANT="optimized"
-$env:PE_COMPARE_TRITON="1"
-$env:PE_ENABLE_THINKING="0"
-$env:PE_BENCH_RUNS="5"
-$env:PE_BENCH_WARMUP="1"
-$env:PE_MAX_NEW_TOKENS="512"
-python tools\benchmark_triton_int8.py
-```
-
-出力で確認する指標:
-
-- `prefill` / `decode` / `total`
-- `decode_tok/s` / `total_tok/s`
-- `[int8:...] fallback_rate=...`
-- `[compare] ... total_speedup=...x`
 
 ## 依存関係
 
