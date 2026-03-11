@@ -8,6 +8,10 @@ import importlib
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Mock dependencies
+if "core" in sys.modules:
+    del sys.modules["core"]
+if "nodes" in sys.modules:
+    del sys.modules["nodes"]
 sys.modules["core.config"] = MagicMock()
 sys.modules["core.assets"] = MagicMock()
 sys.modules["core.tokenizer_patch"] = MagicMock()
@@ -31,16 +35,25 @@ class TestNodesTokenLogic(unittest.TestCase):
         self.node = nodes.INT8_Hunyuan_PromptEnhancer()
         
         # Patch config
-        self.policy_patcher = patch("nodes.config.load_policy")
+        self.policy_patcher = patch.object(nodes.config, "load_policy")
         self.mock_load_policy = self.policy_patcher.start()
         self.mock_load_policy.return_value = {"banned_words": {}}
         
-        self.config_patcher = patch("nodes.config.load_config")
+        self.config_patcher = patch.object(nodes.config, "load_config")
         self.mock_load_config = self.config_patcher.start()
-        self.mock_load_config.return_value = {"int8": {}}
+        self.mock_load_config.return_value = {
+            "models": {
+                "INT8 (Standard)": {
+                    "default": True,
+                    "local_dir": "models/prompt_enhancer",
+                    "repo_id": "tencent/Hunyuan-PromptEnhancer",
+                }
+            }
+        }
         
         # Mocks
-        self.mock_cache = sys.modules["core.cache"]
+        self.mock_cache = nodes.cache
+        self.mock_cache.reset_mock()
         self.mock_enhancer = MagicMock()
         self.mock_cache.get_enhancer.return_value = self.mock_enhancer
         self.mock_enhancer.predict.return_value = "Enhanced Prompt"
@@ -53,6 +66,7 @@ class TestNodesTokenLogic(unittest.TestCase):
         """Test that max_new_tokens is doubled when thinking is enabled"""
         self.node.run(
             text="foo", style_policy="illustration (Tag List)", 
+            model_variant="INT8 (Standard)",
             temperature=0.7, top_p=0.9, 
             max_new_tokens=512, 
             seed=123, 
@@ -69,6 +83,7 @@ class TestNodesTokenLogic(unittest.TestCase):
         """Test that max_new_tokens is capped at 8192"""
         self.node.run(
             text="foo", style_policy="illustration (Tag List)", 
+            model_variant="INT8 (Standard)",
             temperature=0.7, top_p=0.9, 
             max_new_tokens=4096, 
             seed=123, 
@@ -85,6 +100,7 @@ class TestNodesTokenLogic(unittest.TestCase):
         """Test that max_new_tokens is NOT changed when thinking is disabled"""
         self.node.run(
             text="foo", style_policy="illustration (Tag List)", 
+            model_variant="INT8 (Standard)",
             temperature=0.7, top_p=0.9, 
             max_new_tokens=512, 
             seed=123, 

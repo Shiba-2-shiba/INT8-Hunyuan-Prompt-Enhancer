@@ -6,6 +6,9 @@ __pycache__/
 .triton_cache/
 .hf_home/
 models/reprompt-INT8-shiba/
+models/reprompt-heretic-INT8-shiba/
+models/prompt_enhancer/
+models/prompt_enhancer_heretic/
 RUNBOOK.md
 STATUS.md
 TODO.md

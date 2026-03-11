@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 # Mock comfy and torch before importing nodes
 sys.modules["comfy"] = MagicMock()
 sys.modules["comfy.model_management"] = MagicMock()
+sys.modules["comfy"].model_management = sys.modules["comfy.model_management"]
 # We need real torch or mocked torch that behaves somewhat correctly
 # Attempting to mock torch might be tricky if nodes.py imports it inside run
 # But nodes.py run method does "import torch". 
@@ -12,8 +13,10 @@ sys.modules["comfy.model_management"] = MagicMock()
 # If we mock it in sys.modules, the import inside function might get the mock.
 
 # Mock core modules which are dependencies
-mock_core = MagicMock()
-sys.modules["core"] = mock_core
+if "core" in sys.modules:
+    del sys.modules["core"]
+if "nodes" in sys.modules:
+    del sys.modules["nodes"]
 sys.modules["core.config"] = MagicMock()
 sys.modules["core.assets"] = MagicMock()
 sys.modules["core.tokenizer_patch"] = MagicMock()
@@ -30,14 +33,18 @@ import nodes
 
 class TestVRAMLogic(unittest.TestCase):
     @patch("comfy.model_management.soft_empty_cache")
-    @patch("nodes.config.load_config")
-    @patch("nodes.config.load_policy")
-    @patch("nodes.assets.ensure_model")
-    @patch("nodes.tokenizer_patch.patch_tokenizer")
-    @patch("nodes.cache.get_enhancer")
+    @patch.object(nodes.config, "load_config")
+    @patch.object(nodes.config, "load_policy")
+    @patch.object(nodes.assets, "ensure_model")
+    @patch.object(nodes.tokenizer_patch, "patch_tokenizer")
+    @patch.object(nodes.cache, "get_enhancer")
     def test_run_vram_calls(self, mock_get_enhancer, mock_patch, mock_ensure, mock_policy, mock_config, mock_soft_empty):
         # Setup Mocks
-        mock_config.return_value = {'int8': {}}
+        mock_config.return_value = {
+            'models': {
+                'INT8 (Standard)': {'default': True}
+            }
+        }
         mock_policy.return_value = {'banned_words': {}}
         
         mock_enhancer = MagicMock()
@@ -60,6 +67,7 @@ class TestVRAMLogic(unittest.TestCase):
         try:
             result = node.run(
                 text="test", 
+                model_variant="INT8 (Standard)",
                 style_policy="illustration (Tag List)", 
                 temperature=0.0, 
                 top_p=0.9, 
