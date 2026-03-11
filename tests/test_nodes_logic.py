@@ -10,6 +10,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Mock dependencies BEFORE importing nodes
 # We use a helper to avoiding polluting other tests with permanent mocks if possible, 
 # but for now we'll just mock the heavy/IO stuff.
+if "core" in sys.modules:
+    del sys.modules["core"]
+if "nodes" in sys.modules:
+    del sys.modules["nodes"]
 sys.modules["core.config"] = MagicMock()
 sys.modules["core.assets"] = MagicMock()
 sys.modules["core.tokenizer_patch"] = MagicMock()
@@ -40,7 +44,7 @@ class TestINT8HunyuanPromptEnhancer(unittest.TestCase):
         # We can patch the function on the module directly.
         
         # Create a patcher for load_policy
-        self.policy_patcher = patch("nodes.config.load_policy")
+        self.policy_patcher = patch.object(nodes.config, "load_policy")
         self.mock_load_policy = self.policy_patcher.start()
         
         # Setup Config Policy
@@ -48,20 +52,31 @@ class TestINT8HunyuanPromptEnhancer(unittest.TestCase):
         self.mock_load_policy.return_value = self.mock_policy
         
         # We also need to mock load_config because it's called in run()
-        self.config_patcher = patch("nodes.config.load_config")
+        self.config_patcher = patch.object(nodes.config, "load_config")
         self.mock_load_config = self.config_patcher.start()
         self.mock_load_config.return_value = {
-            "int8": {
-                "local_dir": "models/prompt_enhancer",
-                "repo_id": "tencent/Hunyuan-PromptEnhancer"
+            "models": {
+                "INT8 (Standard)": {
+                    "default": True,
+                    "local_dir": "models/prompt_enhancer",
+                    "repo_id": "tencent/Hunyuan-PromptEnhancer"
+                },
+                "INT8 (Heretic)": {
+                    "local_dir": "models/prompt_enhancer_heretic",
+                    "repo_id": "tencent/Hunyuan-PromptEnhancer-Heretic"
+                }
             }
         }
         
         # Verify other mocks
-        self.mock_assets = sys.modules["core.assets"]
-        self.mock_tokenizer_patch = sys.modules["core.tokenizer_patch"]
-        self.mock_cache = sys.modules["core.cache"]
-        self.mock_prompts = sys.modules["core.prompts"]
+        self.mock_assets = nodes.assets
+        self.mock_tokenizer_patch = nodes.tokenizer_patch
+        self.mock_cache = nodes.cache
+        self.mock_prompts = nodes.prompts
+        self.mock_assets.reset_mock()
+        self.mock_tokenizer_patch.reset_mock()
+        self.mock_cache.reset_mock()
+        self.mock_prompts.reset_mock()
         
         # Setup Prompts
         self.mock_prompts.SYS_PROMPT_ILLUST_OPTIMIZED = "SYS_ILLUST"
@@ -73,24 +88,23 @@ class TestINT8HunyuanPromptEnhancer(unittest.TestCase):
         self.mock_enhancer.predict.return_value = "Enhanced Prompt"
         
         # Spy on postprocess
-        from core import postprocess
-        self.original_strip = postprocess.strip_unwanted_photo_style
-        postprocess.strip_unwanted_photo_style = MagicMock(side_effect=self.original_strip)
-        self.spy_strip = postprocess.strip_unwanted_photo_style
+        self.original_strip = nodes.postprocess.strip_unwanted_photo_style
+        nodes.postprocess.strip_unwanted_photo_style = MagicMock(side_effect=self.original_strip)
+        self.spy_strip = nodes.postprocess.strip_unwanted_photo_style
 
     def tearDown(self):
         self.policy_patcher.stop()
         self.config_patcher.stop()
         
         # Restore original function
-        from core import postprocess
-        postprocess.strip_unwanted_photo_style = self.original_strip
+        nodes.postprocess.strip_unwanted_photo_style = self.original_strip
 
     def test_run_illustration_policy(self):
         """Test that illustration policy selects correct system prompt and calls postprocess with policy"""
         style = "illustration (Tag List)"
         self.node.run(
             text="foo", 
+            model_variant="INT8 (Standard)",
             style_policy=style, 
             temperature=0.7, top_p=0.9, max_new_tokens=256, seed=123, 
             enable_thinking=True, device_map="auto", attn_backend="auto"
@@ -114,6 +128,7 @@ class TestINT8HunyuanPromptEnhancer(unittest.TestCase):
         style = "photography (Detailed)"
         self.node.run(
             text="foo", 
+            model_variant="INT8 (Standard)",
             style_policy=style, 
             temperature=0.7, top_p=0.9, max_new_tokens=256, seed=123, 
             enable_thinking=True, device_map="auto", attn_backend="auto"
@@ -131,6 +146,7 @@ class TestINT8HunyuanPromptEnhancer(unittest.TestCase):
         style = "illustration (Tag List)"
         self.node.run(
             text="foo", 
+            model_variant="INT8 (Standard)",
             style_policy=style, 
             temperature=0.7, top_p=0.9, max_new_tokens=256, seed=123, 
             enable_thinking=True, device_map="auto", attn_backend="auto",
@@ -146,6 +162,21 @@ class TestINT8HunyuanPromptEnhancer(unittest.TestCase):
         self.spy_strip.assert_called()
         _, kwargs = self.spy_strip.call_args
         self.assertIn("collector", kwargs)
+
+    def test_run_uses_selected_model_variant(self):
+        """Test that the selected model variant is passed through to asset resolution."""
+        self.node.run(
+            text="foo",
+            model_variant="INT8 (Heretic)",
+            style_policy="photography (Detailed)",
+            temperature=0.7, top_p=0.9, max_new_tokens=256, seed=123,
+            enable_thinking=False, device_map="auto", attn_backend="auto"
+        )
+
+        self.mock_assets.ensure_model.assert_called_with({
+            "local_dir": "models/prompt_enhancer_heretic",
+            "repo_id": "tencent/Hunyuan-PromptEnhancer-Heretic"
+        })
 
 
 if __name__ == '__main__':

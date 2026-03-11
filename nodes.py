@@ -9,12 +9,53 @@ except ImportError:
 
 # --- ComfyUI Node Definition ---
 
+DEFAULT_MODEL_VARIANTS = [
+    "INT8 (Standard)",
+    "INT8 (Heretic)",
+]
+
+
+def _load_model_entries():
+    conf = config.load_config()
+    if "models" in conf:
+        return conf["models"]
+    if "int8" in conf:
+        return {DEFAULT_MODEL_VARIANTS[0]: conf["int8"]}
+    return {}
+
+
+def _get_default_model_variant(model_entries):
+    for variant_name, variant_conf in model_entries.items():
+        if variant_conf.get("default"):
+            return variant_name
+    return next(iter(model_entries), DEFAULT_MODEL_VARIANTS[0])
+
+
+def _get_model_variants():
+    try:
+        model_entries = _load_model_entries()
+        variants = list(model_entries.keys())
+        if variants:
+            return variants
+    except Exception:
+        logging.exception("Failed to load model variants from ckpts.yaml")
+    return list(DEFAULT_MODEL_VARIANTS)
+
+
+def _resolve_model_conf(selected_variant):
+    model_entries = _load_model_entries()
+    if not model_entries:
+        raise KeyError("No model definitions found in ckpts.yaml")
+    variant_name = selected_variant if selected_variant in model_entries else _get_default_model_variant(model_entries)
+    return model_entries[variant_name]
+
 class INT8_Hunyuan_PromptEnhancer:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "text": ("STRING", {"multiline": True, "placeholder": "Enter your prompt here..."}),
+                "model_variant": (_get_model_variants(),),
                 "style_policy": (["illustration (Tag List)", "photography (Detailed)"],),
                 "temperature": ("FLOAT", {"default": 0.0, "step": 0.01, "min": 0, "max": 2.0}),
                 "top_p": ("FLOAT", {"default": 0.9, "step": 0.01, "min": 0, "max": 1.0}),
@@ -37,7 +78,7 @@ class INT8_Hunyuan_PromptEnhancer:
     CATEGORY = "Hunyuan"
 
     def run(self, text, style_policy, temperature, top_p, top_k=5, max_new_tokens=512, seed=0, 
-            enable_thinking=False, device_map="auto", attn_backend="auto", custom_sys_prompt=""):
+            enable_thinking=False, device_map="auto", attn_backend="auto", model_variant=None, custom_sys_prompt=""):
         
         # VRAM Management: Unload other models to free up space
         try:
@@ -50,7 +91,7 @@ class INT8_Hunyuan_PromptEnhancer:
         import torch
 
         # 1. Model Setup
-        conf = config.load_config()['int8']
+        conf = _resolve_model_conf(model_variant)
         policy = config.load_policy() # Load policy (new in Phase 2)
         
         # Initialize Metrics (Phase 3)
